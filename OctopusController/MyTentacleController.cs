@@ -29,19 +29,53 @@ namespace OctopusController
             //you may want to use a list, and then convert it to an array and save it into _bones
 
             List<Transform> list = new List<Transform>();
-            Transform tmpRoot = root;
+            Transform iterator = root;
 
             tentacleMode = mode;
 
             switch (tentacleMode){
                 case TentacleMode.LEG:
                     //TODO: in _endEffectorsphere you keep a reference to the base of the leg
+                    iterator = iterator.GetChild(0);
+                    for(int i = 0; i < 3; i++)
+                    {
+                        list.Add(iterator);
+                        iterator = iterator.GetChild(1);
+                    }
+
+                    _endEffectorSphere = iterator;
+                    list.Add(iterator);
+                    _bones = list.ToArray();
+                    Debug.Log(tentacleMode + " " + _bones.Length);
                     break;
+
                 case TentacleMode.TAIL:
                     //TODO: in _endEffectorsphere you keep a reference to the red sphere 
+                    for (int i = 0; i < 5; i++)
+                    {
+                        list.Add(iterator);
+                        iterator = iterator.GetChild(1);
+                    }
+                    iterator = iterator.parent;
+                    _endEffectorSphere = iterator;
+                    list.Add(iterator);
+                    _bones = list.ToArray();
+                    Debug.Log(tentacleMode + " " + _bones.Length);
                     break;
                 case TentacleMode.TENTACLE:
                     //TODO: in _endEffectorphere you  keep a reference to the sphere with a collider attached to the endEffector
+                    iterator = iterator.GetChild(0).GetChild(0);
+
+                    for(int i = 0; i < 51; i++)
+                    {
+                        iterator = iterator.GetChild(0);
+                        list.Add(iterator);
+
+                    }
+
+                    _endEffectorSphere = iterator.GetChild(0);
+                    _bones = list.ToArray();
+                    Debug.Log(tentacleMode + " " + _bones.Length);
                     break;
             }
             return Bones;

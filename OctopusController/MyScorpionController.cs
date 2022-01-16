@@ -27,11 +27,20 @@ namespace OctopusController
         {
             _legs = new MyTentacleController[LegRoots.Length];
             //Legs init
-            for(int i = 0; i < LegRoots.Length; i++)
+            initPos = new Vector3[_legs.Length];
+            moving = new bool[_legs.Length];
+            alpha = new float[_legs.Length];
+            InitLegOffsets(0.0f, 0.2f, 0.2f, 0.4f, 0.4f, 0.0f);
+            legTargets = new Transform[LegTargets.Length];
+            legFutureBases = new Transform[LegFutureBases.Length];
+            for (int i = 0; i < LegRoots.Length; i++)
             {
                 _legs[i] = new MyTentacleController();
                 _legs[i].LoadTentacleJoints(LegRoots[i], TentacleMode.LEG);
+
                 //TODO: initialize anything needed for the FABRIK implementation
+                legTargets[i] = LegTargets[i];
+                legFutureBases[i] = LegFutureBases[i];
             }
 
         }
@@ -60,14 +69,18 @@ namespace OctopusController
         //TODO: Notifies the start of the walking animation
         public void NotifyStartWalk()
         {
-
+            startWalking = true;
         }
 
         //TODO: create the apropiate animations and update the IK from the legs and tail
 
         public void UpdateIK()
         {
- 
+            if (startWalking)
+            {
+                updateLegPos();
+                updateLegs();
+            }
         }
         #endregion
 
@@ -83,11 +96,43 @@ namespace OctopusController
         Vector3 target = new Vector3(0, 0, 0);
 
 
+        bool startWalking = false;
+        float legThreshold = 0.5f;
+        Vector3[] offsets;
+        bool[] moving;
+        Vector3[] initPos;
+        float[] alpha;
+
+
+
         //TODO: Implement the leg base animations and logic
         private void updateLegPos()
         {
             //check for the distance to the futureBase, then if it's too far away start moving the leg towards the future base position
-            //
+            for(int i = 0; i < _legs.Length; i++)
+            {
+                if((legFutureBases[i].position - _legs[i].Bones[0].position).magnitude >= legThreshold - offsets[i].x && !moving[i])
+                {
+                    moving[i] = true;
+                    initPos[i] = _legs[i].Bones[0].position;
+                    alpha[i] = 0;
+                }
+                else if (moving[i])
+                {
+
+                    if (alpha[i] < 1)
+                    {
+                        Debug.Log(i);
+                        alpha[i] += Time.deltaTime * 2;
+                        if (alpha[i] + Time.deltaTime * 2 > 1) alpha[i] = 1;
+                        _legs[i].Bones[0].position = initPos[i] + (legFutureBases[i].position - offsets[i] - initPos[i]) * alpha[i];
+
+                    }
+                    else
+                        moving[i] = false;
+                }
+
+            }
         }
         //TODO: implement Gradient Descent method to move tail if necessary
         private void updateTail()
@@ -238,6 +283,16 @@ namespace OctopusController
             Solution[i] = solutionAngle;
 
             return gradient;
+        }
+        void InitLegOffsets(float a, float b, float c, float d, float e, float f)
+        {
+            offsets = new Vector3[_legs.Length];
+            offsets[0] = new Vector3(a, 0, 0);
+            offsets[1] = new Vector3(b, 0, 0);
+            offsets[2] = new Vector3(c, 0, 0);
+            offsets[3] = new Vector3(d, 0, 0);
+            offsets[4] = new Vector3(e, 0, 0);
+            offsets[5] = new Vector3(f, 0, 0);
         }
 
         #endregion

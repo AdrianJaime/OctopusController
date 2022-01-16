@@ -38,15 +38,23 @@ namespace OctopusController
 
         public void InitTail(Transform TailBase)
         {
+            //TODO: Initialize anything needed for the Gradient Descent implementation
             _tail = new MyTentacleController();
             _tail.LoadTentacleJoints(TailBase, TentacleMode.TAIL);
-            //TODO: Initialize anything needed for the Gradient Descent implementation
+            Solution = new float[_tail.Bones.Length];
+            InitTailJoints();
+            tailEndEffector = _tail.Bones[_tail.Bones.Length - 1];
         }
 
         //TODO: Check when to start the animation towards target and implement Gradient Descent method to move the joints.
         public void NotifyTailTarget(Transform target)
         {
-
+            tailTarget = target;
+            tailEndEffector = _tail.Bones[_tail.Bones.Length - 1];
+            if ((tailEndEffector.position - tailTarget.position).magnitude <= distance)
+            {
+                updateTail();
+            }
         }
 
         //TODO: Notifies the start of the walking animation
@@ -65,6 +73,16 @@ namespace OctopusController
 
 
         #region private
+
+        float[] Solution = null;
+        TailJoints[] _tailJoints;
+        float StopThreshold = 0.1f;
+        float DeltaGradient = 0.1f;
+        float LearningRate = 50f;
+        float distance = 4f;
+        Vector3 target = new Vector3(0, 0, 0);
+
+
         //TODO: Implement the leg base animations and logic
         private void updateLegPos()
         {
@@ -74,13 +92,154 @@ namespace OctopusController
         //TODO: implement Gradient Descent method to move tail if necessary
         private void updateTail()
         {
-
+            target = tailTarget.position;
+            if (DistanceFromTarget(target, Solution) > StopThreshold)
+                ApproachTarget(target);
         }
         //TODO: implement fabrik method to move legs 
         private void updateLegs()
         {
 
         }
+
+        public struct PositionRotation
+        {
+            Vector3 position;
+            Quaternion rotation;
+
+            public PositionRotation(Vector3 position, Quaternion rotation)
+            {
+                this.position = position;
+                this.rotation = rotation;
+            }
+
+            // PositionRotation to Vector3
+            public static implicit operator Vector3(PositionRotation pr)
+            {
+                return pr.position;
+            }
+            // PositionRotation to Quaternion
+            public static implicit operator Quaternion(PositionRotation pr)
+            {
+                return pr.rotation;
+            }
+        }
+        private struct TailJoints
+        {
+            public Vector3 Axis, StartOffset;
+            public float Min, Max;
+        }
+        private void InitTailJoints()
+        {
+
+            _tailJoints = new TailJoints[_tail.Bones.Length];
+
+            //TAIL JOINT 0            
+            _tailJoints[0].Axis = new Vector3(0, 0, 1);
+            _tailJoints[0].Min = -110;
+            _tailJoints[0].Max = 110;
+            _tailJoints[0].StartOffset = _tail.Bones[0].localPosition;
+            Solution[0] = _tail.Bones[0].localRotation.z;
+
+            //TAIL JOINT 1
+            _tailJoints[1].Axis = new Vector3(1, 0, 0);
+            _tailJoints[1].Min = -100;
+            _tailJoints[1].Max = 30;
+            _tailJoints[1].StartOffset = _tail.Bones[1].localPosition;
+            Solution[1] = _tail.Bones[1].localRotation.x;
+
+            //TAIL JOINT 2
+            _tailJoints[2].Axis = new Vector3(0, 1, 0);
+            _tailJoints[2].Min = -60;
+            _tailJoints[2].Max = 15;
+            _tailJoints[2].StartOffset = _tail.Bones[2].localPosition;
+            Solution[2] = _tail.Bones[2].localRotation.y;
+
+            //TAIL JOINT 3
+            _tailJoints[3].Axis = new Vector3(0, 1, 0);
+            _tailJoints[3].Min = -150;
+            _tailJoints[3].Max = 150;
+            _tailJoints[3].StartOffset = _tail.Bones[3].localPosition;
+            Solution[3] = _tail.Bones[3].localRotation.y;
+
+            //TAIL JOINT 4
+            _tailJoints[4].Axis = new Vector3(1, 0, 0);
+            _tailJoints[4].Min = -180;
+            _tailJoints[4].Max = 180;
+            _tailJoints[4].StartOffset = _tail.Bones[4].localPosition;
+            Solution[4] = _tail.Bones[4].localRotation.x;
+
+            //TAIL JOINT END EFFECTOR
+            _tailJoints[5].Axis = new Vector3(1, 0, 0);
+            _tailJoints[5].Min = -180;
+            _tailJoints[5].Max = 180;
+            _tailJoints[5].StartOffset = _tail.Bones[5].localPosition;
+            Solution[5] = _tail.Bones[5].localRotation.x;
+        }
+        public PositionRotation ForwardKinematics(float[] Solution)
+        {
+            Vector3 prevPoint = _tail.Bones[0].position;
+
+            // Takes object initial rotation into account
+            Quaternion rotation = _tail.Bones[0].parent.parent.rotation;
+            for (int i = 1; i < _tail.Bones.Length - 1; i++)
+            {
+                // Rotates around a new axis
+
+                rotation *= Quaternion.AngleAxis(Solution[i - 1], _tailJoints[i - 1].Axis);
+
+                Vector3 nextPoint = prevPoint + rotation * _tailJoints[i].StartOffset * 0.32622f;
+
+                //Debug.DrawLine(prevPoint, nextPoint, Color.green);
+                prevPoint = nextPoint;
+            }
+
+            // The end of the effector
+            return new PositionRotation(prevPoint, rotation);
+        }
+        public float DistanceFromTarget(Vector3 target, float[] Solution)
+        {
+            Vector3 point = ForwardKinematics(Solution);
+            return Vector3.Distance(point, target);
+        }
+        public void ApproachTarget(Vector3 target)
+        {
+
+            float p_gradient;
+
+            for (int i = _tail.Bones.Length - 1; i >= 0; i--)
+            {
+                p_gradient = CalculateGradient(target, Solution, i, DeltaGradient);
+                Solution[i] -= LearningRate * p_gradient;
+                Solution[i] = Mathf.Clamp(Solution[i], _tailJoints[i].Min, _tailJoints[i].Max);
+                
+                if (_tailJoints[i].Axis.x == 1) _tail.Bones[i].localEulerAngles = new Vector3(Solution[i], 0, 0);
+                else
+                if (_tailJoints[i].Axis.y == 1) _tail.Bones[i].localEulerAngles = new Vector3(0, Solution[i], 0);
+                else
+                if (_tailJoints[i].Axis.z == 1) _tail.Bones[i].localEulerAngles = new Vector3(0, 0, Solution[i]);
+
+
+                if (DistanceFromTarget(target, Solution) < StopThreshold) return;
+            }
+        }
+        public float CalculateGradient(Vector3 target, float[] Solution, int i, float delta)
+        {
+            float solutionAngle = Solution[i];
+
+
+            float f_x = DistanceFromTarget(target, Solution);
+
+            Solution[i] += delta;
+            float f_x_plus_h = DistanceFromTarget(target, Solution);
+
+            float gradient = (f_x_plus_h - f_x) / delta;
+
+            Solution[i] = solutionAngle;
+
+            return gradient;
+        }
+
         #endregion
     }
 }

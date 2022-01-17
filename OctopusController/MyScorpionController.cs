@@ -42,7 +42,14 @@ namespace OctopusController
                 legTargets[i] = LegTargets[i];
                 legFutureBases[i] = LegFutureBases[i];
             }
+            aux = new Vector3[_legs[0].Bones.Length];
+            dist = new float[_legs[0].Bones.Length - 1];
 
+            for (int i = 0; i < dist.Length; i++)
+            {
+                Vector3 vec = _legs[0].Bones[i + 1].position - _legs[0].Bones[i].position;
+                dist[i] = vec.magnitude;
+            }
         }
 
         public void InitTail(Transform TailBase)
@@ -98,10 +105,10 @@ namespace OctopusController
 
         bool startWalking = false;
         float legThreshold = 0.5f;
-        Vector3[] offsets;
+        Vector3[] offsets, initPos, aux;
         bool[] moving;
-        Vector3[] initPos;
-        float[] alpha;
+        float[] alpha, dist;
+
 
 
 
@@ -144,7 +151,36 @@ namespace OctopusController
         //TODO: implement fabrik method to move legs 
         private void updateLegs()
         {
+            for (int j = 0; j < _legs.Length; j++)
+            {
+                for (int i = 0; i < aux.Length; i++)
+                {
+                    aux[i] = _legs[j].Bones[i].position;
+                }
+                if (Vector3.Distance(aux[0], legTargets[j].position) <= this.dist.Sum())
+                {
+                    int iterator = 4;
 
+                    while (iterator != 0)
+                    {
+                        aux[aux.Length - 1] = legTargets[j].position;
+                        for (int i = aux.Length - 2; i >= 0; i--)
+                            aux[i] = aux[i + 1] + ((_legs[j].Bones[i].position - aux[i + 1]).normalized * this.dist[i]);
+                        aux[0] = _legs[j].Bones[0].position;
+                        for (int i = 1; i <= aux.Length - 1; i++)
+                            aux[i] = aux[i - 1] + ((aux[i] - aux[i - 1]).normalized * this.dist[i - 1]);
+                        iterator--;
+                    }
+                }
+
+                for (int i = 0; i <= _legs[j].Bones.Length - 2; i++)
+                {
+                    _legs[j].Bones[i].position = aux[i];
+                    _legs[j].Bones[i].LookAt(aux[i + 1]);
+                    _legs[j].Bones[i].Rotate(90, 0, 0, Space.Self);
+                }
+                _legs[j].Bones[_legs[j].Bones.Length - 1].position = aux[_legs[j].Bones.Length - 1];
+            }
         }
 
         public struct PositionRotation
